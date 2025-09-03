@@ -1,8 +1,9 @@
 # LangChain Chatbot with Retrieval‑Augmented Generation (RAG)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 
-A **minimal yet production‑ready** chatbot built on **[LangChain](https://python.langchain.com/)** that demonstrates **Retrieval‑Augmented Generation (RAG)**. The bot retrieves relevant context from a document store and feeds it to a language model, enabling accurate, up‑to‑date answers.
+A **modular, production‑ready chatbot** built on **[LangChain](https://python.langchain.com/)** that demonstrates **Retrieval‑Augmented Generation (RAG)**.  The bot can answer questions over a custom knowledge base, combine LLM reasoning with vector‑store retrieval, and be extended with additional tools.
 
 ---
 
@@ -10,9 +11,13 @@ A **minimal yet production‑ready** chatbot built on **[LangChain](https://pyth
 
 - [Features](#features)
 - [Architecture Overview](#architecture-overview)
-- [Quick Start (Local)](#quick-start-local)
-- [Running with Docker](#running-with-docker)
+- [Quick Start](#quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [Run the Demo](#run-the-demo)
 - [Configuration](#configuration)
+- [Project Structure](#project-structure)
+- [Extending the Bot](#extending-the-bot)
 - [Testing](#testing)
 - [Contributing](#contributing)
 - [License](#license)
@@ -21,129 +26,168 @@ A **minimal yet production‑ready** chatbot built on **[LangChain](https://pyth
 
 ## Features
 
-- **RAG pipeline**: Combine vector similarity search with LLM generation.
-- **Modular design**: Easily swap out LLMs, embeddings, or vector stores.
-- **FastAPI backend** with OpenAPI schema for rapid integration.
-- **Docker support** for reproducible environments.
-- **Extensive type hints** and **unit tests**.
-- **Contribution‑ready**: CI workflow, linting, and documentation guidelines.
+- **RAG pipeline**: combines a Large Language Model (LLM) with a vector store (FAISS, Chroma, Pinecone, …) to retrieve relevant documents before generation.
+- **LangChain integration**: uses LangChain’s `RetrievalQA`, `ConversationalRetrievalChain`, and `LLMChain` abstractions.
+- **Modular design**: separate modules for data ingestion, embedding, retrieval, and chat UI.
+- **Config‑driven**: all components (LLM, embeddings, vector store, prompt templates) are configurable via a single `config.yaml`.
+- **Docker support**: run the entire stack in containers for reproducibility.
+- **Unit & integration tests** with `pytest`.
+- **Contribution guidelines** and CI configuration (GitHub Actions).
 
 ---
 
 ## Architecture Overview
 
-```mermaid
-flowchart TD
-    subgraph User
-        UI[Web UI / API client]
-    end
-    subgraph Backend[FastAPI Service]
-        API[API Router]
-        RAG[RAG Pipeline]
-        LLM[LLM Provider]
-        VS[Vector Store]
-        EMB[Embedding Model]
-    end
-    UI -->|HTTP request| API -->|invoke| RAG -->|retrieve| VS -->|similarity search| EMB
-    RAG -->|generate| LLM
-    LLM -->|response| API -->|HTTP response| UI
+```
++-------------------+      +-------------------+      +-------------------+
+|   Data Sources    | ---> |   Ingestion       | ---> |   Vector Store    |
+| (txt, pdf, csv…)  |      | (Chunking,       |      | (FAISS, Chroma…) |
++-------------------+      |  Embedding)      |      +-------------------+
+                               |                     |
+                               v                     v
+                         +-------------------+   +-------------------+
+                         |   Retrieval QA   |   |   Chat Interface |
+                         | (LangChain)      |   | (FastAPI/Streamlit) |
+                         +-------------------+   +-------------------+
 ```
 
-- **Vector Store**: Currently uses **FAISS** (in‑memory) but can be replaced with **Pinecone**, **Weaviate**, etc.
-- **Embedding Model**: OpenAI `text-embedding-ada-002` (configurable via environment).
-- **LLM Provider**: OpenAI `gpt-3.5-turbo` by default; supports any LangChain‑compatible LLM.
+1. **Ingestion** – Documents are loaded, split into chunks, and embedded using an LLM‑provided embedding model.
+2. **Vector Store** – Embeddings are persisted in a fast similarity search index.
+3. **Retrieval QA** – LangChain’s `RetrievalQA` fetches the top‑k relevant chunks and passes them to the LLM for answer generation.
+4. **Chat Interface** – A lightweight FastAPI endpoint (or Streamlit UI) that maintains conversation history and streams responses.
 
 ---
 
-## Quick Start (Local)
+## Quick Start
 
 ### Prerequisites
 
-- Python **3.10** or newer
-- `git` and `pip`
-- An **OpenAI API key** (or another LLM provider key) stored in `OPENAI_API_KEY`
+- Python **3.9+**
+- [Poetry](https://python-poetry.org/) **or** pip/virtualenv
+- An OpenAI API key (or another LLM provider supported by LangChain)
+- Optional: Docker & Docker‑Compose if you prefer containerised execution
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/your‑org/langchain-chatbot.git
+git clone https://github.com/your-org/langchain-chatbot.git
 cd langchain-chatbot
 
-# Create a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # on Windows: .venv\Scripts\activate
+# Using Poetry (recommended)
+poetry install
+poetry shell
 
-# Install dependencies
+# Or with pip & venv
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Prepare the knowledge base
+Create a `.env` file at the project root with your credentials:
 
-Place your source documents (PDF, TXT, MD, etc.) in the `data/` directory. Then run the ingestion script:
-
-```bash
-python scripts/ingest.py
+```dotenv
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# If using another provider, set the appropriate env vars (e.g., ANTHROPIC_API_KEY)
 ```
 
-The script will:
-1. Load documents using LangChain loaders.
-2. Split them into chunks.
-3. Compute embeddings.
-4. Persist the FAISS index to `faiss_index/`.
-
-### Run the API server
+### Run the Demo
 
 ```bash
-uvicorn app.main:app --reload
+# Start the FastAPI server (default at http://127.0.0.1:8000)
+python -m src.main
 ```
 
-Open `http://127.0.0.1:8000/docs` to explore the automatically generated OpenAPI UI.
-
----
-
-## Running with Docker
-
-A multi‑stage Dockerfile is provided for reproducible builds.
+Open your browser and navigate to `http://127.0.0.1:8000/docs` for the interactive Swagger UI, or use the optional Streamlit UI:
 
 ```bash
-# Build the image
-docker build -t langchain-chatbot .
-
-# Run the container (replace <your‑key> with your OpenAI key)
-docker run -e OPENAI_API_KEY=<your‑key> -p 8000:8000 langchain-chatbot
+streamlit run src/ui/chat_interface.py
 ```
 
-The service will be reachable at `http://localhost:8000`.
+You can now ask questions that are answered using the underlying knowledge base.
 
 ---
 
 ## Configuration
 
-Configuration is driven by environment variables. Create a `.env` file at the project root or export variables directly.
+All runtime options are stored in `config.yaml`.  Example snippet:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | Your OpenAI API key. | *(required)* |
-| `LLM_MODEL` | Model name for the LLM provider. | `gpt-3.5-turbo` |
-| `EMBEDDING_MODEL` | Embedding model identifier. | `text-embedding-ada-002` |
-| `VECTOR_STORE` | Vector store implementation (`faiss`, `pinecone`, …). | `faiss` |
-| `CHUNK_SIZE` | Number of tokens per text chunk. | `1000` |
-| `CHUNK_OVERLAP` | Overlap between chunks (tokens). | `200` |
+```yaml
+llm:
+  provider: openai
+  model: gpt-4o-mini
+  temperature: 0.0
 
-The `Config` class in `app/config.py` loads these variables with **pydantic‑settings** for type safety.
+embeddings:
+  provider: openai
+  model: text-embedding-3-large
+
+vector_store:
+  type: faiss
+  index_path: data/faiss_index
+
+retrieval:
+  top_k: 4
+  search_type: similarity
+
+prompt:
+  system: |
+    You are a helpful assistant that answers questions based on the provided context.
+  user: |
+    Context:\n{context}\n\nQuestion:\n{question}
+```
+
+Edit this file to switch LLM providers, change the number of retrieved documents, or point to a different vector‑store implementation.
+
+---
+
+## Project Structure
+
+```
+langchain-chatbot/
+├─ data/                     # Raw documents & generated vector indexes
+├─ src/
+│  ├─ ingestion/            # Loaders, splitters, embedding logic
+│  ├─ retrieval/            # RetrievalQA wrappers and prompt templates
+│  ├─ api/                  # FastAPI routes (chat, health, etc.)
+│  ├─ ui/                   # Optional Streamlit UI
+│  ├─ core/                 # Core LangChain utilities (LLM wrappers, callbacks)
+│  └─ main.py               # Application entry‑point
+├─ tests/                    # Unit & integration tests
+├─ config.yaml               # Default configuration
+├─ requirements.txt          # Pin‑exact dependencies (for pip users)
+├─ pyproject.toml           # Poetry project definition
+└─ README.md                # ← you are here
+```
+
+---
+
+## Extending the Bot
+
+### Adding a New Data Source
+1. Implement a loader in `src/ingestion/loaders.py` that returns a list of `Document` objects.
+2. Register the loader in `src/ingestion/__init__.py`.
+3. Run the ingestion script:
+   ```bash
+   python -m src.ingestion.run --source my_new_source
+   ```
+
+### Switching the Vector Store
+Replace the `vector_store.type` in `config.yaml` with `chroma`, `pinecone`, or any LangChain‑compatible store.  Ensure the required SDK is added to `pyproject.toml`.
+
+### Custom Prompt Templates
+Edit `config.yaml → prompt` or create a new Jinja2 template under `src/prompt_templates/` and reference it in `src/retrieval/retrieval_qa.py`.
 
 ---
 
 ## Testing
 
-Unit and integration tests are located in the `tests/` directory. Run them with:
-
 ```bash
+# Run the full test suite
 pytest -vv
 ```
 
-Coverage is enforced at **90 %** in the CI pipeline.
+The CI pipeline (GitHub Actions) runs the same command on each push, ensuring linting (`ruff`), type checking (`mypy`), and test coverage (`coverage`).
 
 ---
 
@@ -151,27 +195,14 @@ Coverage is enforced at **90 %** in the CI pipeline.
 
 We welcome contributions! Please follow these steps:
 
-1. **Fork** the repository and create a feature branch.
-2. Follow the existing code style (black, isort, flake8). You can run the formatter with `make format`.
-3. Add or update tests for new functionality.
-4. Ensure all tests pass and coverage remains above 90 %.
-5. Open a Pull Request with a clear description of the changes.
+1. **Fork** the repository.
+2. **Create a feature branch** (`git checkout -b feat/your-feature`).
+3. **Write tests** for any new functionality.
+4. **Run the test suite** locally (`pytest`).
+5. **Commit** with a clear message following the conventional‑commit style.
+6. **Open a Pull Request** against `main`.
 
-### Development workflow
-
-```bash
-# Install development extras
-pip install -e .[dev]
-
-# Run linting & formatting checks
-make lint
-make format
-
-# Run the test suite
-make test
-```
-
-See `CONTRIBUTING.md` for detailed guidelines.
+See `CONTRIBUTING.md` for detailed guidelines, coding standards, and the development workflow.
 
 ---
 
