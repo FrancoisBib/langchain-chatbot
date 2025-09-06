@@ -1,71 +1,68 @@
 # LangChain Chatbot with Retrieval‑Augmented Generation (RAG)
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9%2B-brightgreen.svg)](https://www.python.org/downloads/)
+![LangChain](https://img.shields.io/badge/Powered%20by-LangChain-blue)
+![Python](https://img.shields.io/badge/Python-3.9%2B%20%7C%203.10%7C%203.11-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-A minimal, production‑ready chatbot built on **LangChain** that demonstrates **Retrieval‑Augmented Generation (RAG)**. The bot retrieves relevant documents from a vector store, feeds them to a language model, and returns context‑aware answers.
+A minimal yet extensible reference implementation of a **chatbot** built with **[LangChain](https://github.com/hwchase17/langchain)** that leverages **Retrieval‑Augmented Generation (RAG)** to answer questions using a custom knowledge base.
 
 ---
 
 ## Table of Contents
 
-- [Features](#features)
-- [Architecture Overview](#architecture-overview)
-- [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the Demo](#running-the-demo)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [Usage Guide](#usage-guide)
-  - [Adding Documents](#adding-documents)
-  - [Querying the Bot](#querying-the-bot)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [License](#license)
+1. [Features](#features)
+2. [Architecture Overview](#architecture-overview)
+3. [Getting Started](#getting-started)
+   - [Prerequisites](#prerequisites)
+   - [Installation](#installation)
+   - [Running the Demo](#running-the-demo)
+4. [Project Structure](#project-structure)
+5. [Configuration](#configuration)
+6. [Usage Guide](#usage-guide)
+   - [Indexing Documents](#indexing-documents)
+   - [Chatting with the Bot](#chatting-with-the-bot)
+7. [Testing](#testing)
+8. [Contributing](#contributing)
+9. [License](#license)
+10. [References](#references)
 
 ---
 
 ## Features
 
-- **LangChain** integration for modular LLM pipelines.
-- **RAG** workflow: document ingestion → embedding → vector store → similarity search → LLM generation.
-- Supports **OpenAI**, **Anthropic**, and **local** LLM providers via LangChain's `ChatModel` abstraction.
-- Simple CLI and optional FastAPI web interface.
-- Dockerfile for reproducible container builds.
-- Comprehensive test suite with `pytest`.
+- **RAG pipeline** – combines a vector store retriever with a LLM for grounded responses.
+- **Modular design** – easy to swap the LLM, embeddings model, or vector store.
+- **Document ingestion** – supports plain‑text, PDFs and Markdown out‑of‑the‑box.
+- **Prompt templating** – customizable system and human prompts.
+- **Simple CLI demo** – start a conversational session in seconds.
+- **Extensible** – ready for integration with FastAPI, Streamlit, or any custom UI.
 
 ---
 
 ## Architecture Overview
 
-```mermaid
-flowchart LR
-    subgraph Ingestion
-        Docs[Documents] -->|Chunk & Embed| VectorStore[Vector Store]
-    end
-    subgraph Query
-        User[User Query] --> Retriever[Similarity Retriever]
-        Retriever -->|Relevant chunks| LLM[LLM (Chat Model)]
-        LLM -->|Answer| Response[Chatbot Reply]
-    end
-    VectorStore --> Retriever
+```
+User Input ──► PromptTemplate ──► LLM (e.g., OpenAI, Anthropic)
+                     ▲                │
+                     │                ▼
+                Retriever ◄── VectorStore ◄── Indexed Docs
 ```
 
-1. **Document Ingestion** – Text files (PDF, TXT, MD) are split into chunks and embedded using a model from `sentence‑transformers` or OpenAI embeddings.
-2. **Vector Store** – Embeddings are stored in a FAISS index (or alternative back‑ends such as Chroma, Pinecone).
-3. **Retriever** – At query time, the most similar chunks are fetched.
-4. **LLM Generation** – The retrieved context is passed to the LLM with a prompt template, producing a grounded answer.
+1. **Document Loader** – reads source files and splits them into chunks.
+2. **Embeddings** – converts each chunk into a dense vector (e.g., OpenAI `text-embedding-ada-002`).
+3. **Vector Store** – persists embeddings (default: `FAISS`).
+4. **Retriever** – fetches the most relevant chunks for a user query.
+5. **LLM** – generates the final answer using a prompt that includes the retrieved context.
 
 ---
 
-## Quick Start
+## Getting Started
 
 ### Prerequisites
 
-- Python **3.9** or newer
-- An OpenAI API key (or another supported LLM provider)
-- `git` and `pip`
+- Python **3.9** or newer (tested on 3.9‑3.11).
+- An OpenAI API key (or another provider supported by LangChain).
+- Git (to clone the repository).
 
 ### Installation
 
@@ -74,32 +71,32 @@ flowchart LR
 git clone https://github.com/your‑org/langchain-chatbot.git
 cd langchain-chatbot
 
-# Create a virtual environment (optional but recommended)
+# Create a virtual environment (recommended)
 python -m venv .venv
-source .venv/bin/activate  # on Windows use `.venv\Scripts\activate`
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 ```
 
+> **Tip** – If you prefer `poetry` or `pipenv`, the `pyproject.toml` is already provided.
+
 ### Running the Demo
 
 ```bash
-# 1️⃣ Ingest sample documents (located in `data/`)
-python scripts/ingest.py
+# Set your OpenAI key (or other provider) as an environment variable
+export OPENAI_API_KEY='sk-...'
+# On Windows PowerShell:
+# $env:OPENAI_API_KEY='sk-...'
 
-# 2️⃣ Start the chatbot (CLI mode)
-python scripts/chat.py
+# Index example documents (run once or when docs change)
+python scripts/index_documents.py --source data/
+
+# Start the interactive chat CLI
+python scripts/chat_cli.py
 ```
 
-You will be prompted for a question. The bot will retrieve relevant passages and generate a response.
-
-To launch the optional FastAPI UI:
-
-```bash
-uvicorn api.main:app --reload
-```
-Then open <http://127.0.0.1:8000/docs>.
+You should now be able to ask natural‑language questions and receive answers grounded in the indexed knowledge base.
 
 ---
 
@@ -107,113 +104,136 @@ Then open <http://127.0.0.1:8000/docs>.
 
 ```
 langchain-chatbot/
-│
-├─ data/                 # Sample documents for ingestion
-├─ src/                  # Core library code
-│   ├─ agents/           # LangChain agents (optional extensions)
-│   ├─ chain/            # Retrieval‑augmented generation chain
-│   ├─ prompts/          # Prompt templates (Jinja2)
-│   └─ utils/            # Helper functions (logging, config)
-│
-├─ scripts/              # CLI utilities (ingest, chat, eval)
-│   ├─ ingest.py         # Load docs → vector store
-│   └─ chat.py           # Interactive REPL
-│
-├─ api/                  # FastAPI wrapper (optional UI)
-│   └─ main.py
-│
-├─ tests/                # Unit & integration tests
+├─ data/                # Sample documents (txt, pdf, md) used for indexing
+├─ scripts/            # Utility scripts (indexing, CLI, tests)
+│   ├─ index_documents.py   # Loads docs → splits → embeds → stores
+│   └─ chat_cli.py           # Simple REPL chat interface
+├─ src/                # Core library code (can be imported as a package)
+│   ├─ __init__.py
+│   ├─ config.py       # Centralised configuration (LLM, embeddings, store)
+│   ├─ loaders.py      # Document loaders & chunking helpers
+│   ├─ retriever.py    # Vector store wrapper
+│   └─ chatbot.py      # RAG chain definition
+├─ tests/              # Pytest suite
 │   └─ test_chatbot.py
-│
-├─ requirements.txt      # Python dependencies
-├─ Dockerfile            # Container build definition
-└─ README.md             # ← you are here
+├─ .gitignore
+├─ requirements.txt
+├─ pyproject.toml
+└─ README.md
 ```
 
 ---
 
 ## Configuration
 
-Configuration is handled through a **`.env`** file (loaded with `python‑dotenv`). Example:
+All configurable items live in `src/config.py`. The defaults work with OpenAI, but you can replace them with any LangChain‑compatible component.
 
-```dotenv
-# .env (example)
-OPENAI_API_KEY=sk-****************
-EMBEDDING_MODEL=text-embedding-ada-002   # OpenAI embedding model
-VECTORSTORE_PATH=./vectorstore/faiss_index
-LLM_MODEL=gpt-4o                         # Change to `gpt-3.5-turbo` or a local model name
-TEMPERATURE=0.7
-TOP_K=4                                   # Number of retrieved chunks per query
+```python
+# src/config.py
+from langchain.llms import OpenAI
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.vectorstores import FAISS
+
+# LLM – you can swap to Anthropic, Cohere, etc.
+LLM = OpenAI(model_name="gpt-3.5-turbo", temperature=0.2)
+
+# Embeddings model
+EMBEDDINGS = OpenAIEmbeddings()
+
+# Vector store – persists to `./vector_store/faiss_index`
+VECTOR_STORE_PATH = "vector_store/faiss_index"
 ```
 
-The `src.utils.config` module provides a typed dataclass for easy access.
+To use a different provider, edit the corresponding class imports and parameters.
 
 ---
 
 ## Usage Guide
 
-### Adding Documents
-
-Place any `.txt`, `.md`, or `.pdf` files inside the `data/` directory and run:
+### Indexing Documents
 
 ```bash
-python scripts/ingest.py --source data/ --store vectorstore/faiss_index
+python scripts/index_documents.py --source data/ --store_path vector_store/faiss_index
 ```
+
+- `--source` – directory containing the documents to ingest.
+- `--store_path` – optional custom location for the FAISS index.
 
 The script will:
-1. Load files with `UnstructuredLoader`.
-2. Split them using `RecursiveCharacterTextSplitter`.
-3. Embed chunks and persist the FAISS index.
+1. Load supported file types (`.txt`, `.md`, `.pdf`).
+2. Split them with a `RecursiveCharacterTextSplitter` (default chunk size 1000, overlap 200).
+3. Generate embeddings and store them in FAISS.
 
-### Querying the Bot
+### Chatting with the Bot
 
-#### CLI
+Run the CLI as shown earlier, or import the chain in your own code:
 
-```bash
-python scripts/chat.py
+```python
+from src.chatbot import get_chat_chain
+from src.config import LLM, EMBEDDINGS, VECTOR_STORE_PATH
+
+chain = get_chat_chain(
+    llm=LLM,
+    embeddings=EMBEDDINGS,
+    vector_store_path=VECTOR_STORE_PATH,
+)
+
+while True:
+    query = input("🗨️ > ")
+    if query.lower() in {"exit", "quit"}:
+        break
+    response = chain.run(query)
+    print("🤖", response)
 ```
-Enter a question and receive a context‑aware answer.
 
-#### FastAPI
-
-Send a POST request to `/chat` with JSON payload:
-
-```json
-{ "question": "What is Retrieval‑Augmented Generation?" }
-```
-The response contains the answer and the retrieved source snippets.
+You can also expose the chain via an API (FastAPI example in `examples/fastapi_app.py`).
 
 ---
 
 ## Testing
 
-Run the test suite with:
+The repository includes a minimal test suite using **pytest**.
 
 ```bash
-pytest -v
+pip install pytest
+pytest -q
 ```
-Coverage is enforced at **90 %**. New features should include corresponding unit tests.
+
+Tests cover:
+- Document loading & chunking.
+- Vector store creation and retrieval.
+- End‑to‑end RAG chain execution with a mock LLM.
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps:
+Contributions are welcome! Follow these steps:
 
 1. **Fork** the repository.
 2. Create a **feature branch** (`git checkout -b feat/your-feature`).
-3. Ensure code style with `ruff` and type‑check with `mypy`:
-   ```bash
-   ruff check . && mypy src/
-   ```
-4. Write tests for any new functionality.
-5. Open a **Pull Request** with a clear description of the change.
-6. CI will run linting, tests, and build the Docker image.
+3. Keep the code style consistent – we use **black** and **isort**.
+4. Add or update tests for new functionality.
+5. Ensure the CI pipeline passes (`pytest` and `flake8`).
+6. Open a **Pull Request** with a clear description of the change.
 
-See `CONTRIBUTING.md` for detailed guidelines.
+Please see `CONTRIBUTING.md` for detailed guidelines (code of conduct, commit message format, etc.).
 
 ---
 
 ## License
 
-Distributed under the **MIT License**. See `LICENSE` for more information.
+This project is licensed under the **MIT License** – see the `LICENSE` file for details.
+
+---
+
+## References
+
+- LangChain Documentation: https://langchain.com/docs/
+- Retrieval‑Augmented Generation (RAG) paper: https://arxiv.org/abs/2005.11401
+- OpenAI Embeddings: https://platform.openai.com/docs/guides/embeddings
+- FAISS vector store: https://github.com/facebookresearch/faiss
+
+---
+
+*Happy building with LangChain!*
