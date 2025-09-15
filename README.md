@@ -1,220 +1,156 @@
 # LangChain Chatbot
 
-## Overview
+## 📖 Overview
 
-**LangChain‑Chatbot** is a minimal yet extensible reference implementation for building conversational agents powered by **LangChain** and **Retrieval‑Augmented Generation (RAG)**.  The project demonstrates how to:
+`langchain-chatbot` is a **modular, extensible chatbot** built on top of **[LangChain](https://github.com/langchain-ai/langchain)** that demonstrates **Retrieval‑Augmented Generation (RAG)**. The project showcases how to combine large language models (LLMs) with external knowledge sources (vector stores, databases, APIs) to build conversational agents that can:
 
-- Connect a large language model (LLM) to a vector store for document retrieval.
-- Compose a **Retriever → LLM** pipeline using LangChain's `ConversationalRetrievalChain`.
-- Deploy the chatbot locally or to a cloud environment.
-- Extend the core logic with custom tools, memory, and callbacks.
+- Answer questions using up‑to‑date information.
+- Perform tool‑use (e.g., web search, calculator) within a conversation.
+- Be easily customized or extended with new data sources and LLM providers.
 
-The repository is intentionally lightweight so you can focus on the core concepts and adapt the code to your own use‑case.
+The repository contains:
 
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the Demo](#running-the-demo)
-- [Project Structure](#project-structure)
-- [How It Works](#how-it-works)
-  - [RAG Pipeline](#rag-pipeline)
-  - [Memory & Conversation History](#memory--conversation-history)
-- [Customization Guide](#customization-guide)
-  - [Swapping the LLM](#swapping-the-llm)
-  - [Using a Different Vector Store](#using-a-different-vector-store)
-  - [Adding Tools & Functions](#adding-tools--functions)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [License](#license)
+- A minimal but functional example app (`app.py`).
+- A reusable `Chatbot` class that encapsulates the RAG pipeline.
+- Configuration files for environment variables and vector store setup.
+- Tests and CI configuration for continuous integration.
 
 ---
 
-## Features
-
-- **LangChain integration** – leverages LangChain’s `ConversationalRetrievalChain` for a clean RAG workflow.
-- **Pluggable components** – swap LLMs, embeddings, and vector stores with a single line change.
-- **In‑memory and persistent storage** – examples include `FAISS` (in‑memory) and `ChromaDB` (persistent).
-- **Conversation memory** – keeps track of chat history using LangChain’s `ConversationBufferMemory`.
-- **Docker support** – optional `Dockerfile` for containerised deployment.
-- **Extensible architecture** – easy to add custom tools, callbacks, or chain components.
-
----
-
-## Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
 | Requirement | Version |
 |-------------|---------|
-| Python      | >=3.9   |
+| Python      | `>=3.9` |
 | pip         | latest  |
 | OpenAI API key (or any compatible LLM provider) |
-| Optional: Docker (for containerised run) |
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/your‑org/langchain-chatbot.git
+git clone https://github.com/your-org/langchain-chatbot.git
 cd langchain-chatbot
 
 # Create a virtual environment (recommended)
 python -m venv .venv
-source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # on Windows use `.venv\Scripts\activate`
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Set your environment variables (example for OpenAI)
-export OPENAI_API_KEY='sk-...'
-# For Windows PowerShell:
-# $env:OPENAI_API_KEY='sk-...'
 ```
 
-### Running the Demo
+### Environment configuration
 
-The repository ships with a simple CLI chat interface:
+Create a `.env` file at the project root and add the required keys:
+
+```dotenv
+# .env
+OPENAI_API_KEY=sk-...          # or any other LLM provider key
+VECTOR_STORE_URL=sqlite:///data.db   # example using SQLite; adjust for Pinecone, Weaviate, etc.
+```
+
+### Run the demo chatbot
 
 ```bash
-python -m chatbot.main
+python app.py
 ```
 
-You will be prompted to enter a query. The bot will retrieve relevant passages from the supplied document store and generate a response using the configured LLM.
-
-#### Docker (optional)
-
-```bash
-# Build the image
-docker build -t langchain‑chatbot .
-
-# Run the container (remember to pass your API key)
-docker run -e OPENAI_API_KEY=$OPENAI_API_KEY -p 8000:8000 langchain‑chatbot
-```
+You will be dropped into an interactive REPL where you can type questions and receive RAG‑augmented answers.
 
 ---
 
-## Project Structure
+## 🛠️ Architecture & Core Concepts
+
+### 1. Retrieval‑Augmented Generation (RAG)
+
+RAG combines **retrieval** (searching a knowledge base) with **generation** (LLM response). The typical flow is:
+
+1. **User query** → embed the query.
+2. **Retriever** fetches the most relevant documents from a vector store.
+3. **Prompt template** combines the retrieved docs with the original query.
+4. **LLM** generates the final answer.
+
+### 2. Main Components
+
+| Component | Responsibility |
+|-----------|-----------------|
+| `Chatbot` (src/chatbot.py) | Orchestrates the RAG pipeline, manages session history, and provides a simple `ask(question: str) -> str` API. |
+| `Retriever` | Wraps a LangChain `VectorStoreRetriever` (e.g., FAISS, Pinecone, Chroma). |
+| `PromptTemplate` | Defines how retrieved documents are injected into the LLM prompt. |
+| `LLM` | Any LangChain‑compatible language model (OpenAI, Anthropic, Cohere, etc.). |
+| `Memory` (optional) | Stores conversation history for context‑aware replies. |
+
+### 3. Extending the Bot
+
+- **Add a new data source** – create a script that loads documents, splits them (using `RecursiveCharacterTextSplitter`), embeds them (`OpenAIEmbeddings` or any other) and upserts them into the chosen vector store.
+- **Swap the LLM** – replace `OpenAI` with `ChatAnthropic`, `Cohere`, or a locally hosted model that implements LangChain's `BaseLLM` interface.
+- **Custom tools** – implement LangChain `Tool` subclasses (e.g., web‑search, calculator) and add them to the `AgentExecutor` if you need tool‑use capabilities.
+
+---
+
+## 📂 Project Structure
 
 ```
 langchain-chatbot/
-├─ chatbot/                # Core package
-│   ├─ __init__.py
-│   ├─ config.py           # Settings (LLM, embeddings, vector store)
-│   ├─ retriever.py        # Vector store wrapper
-│   ├─ chain.py            # ConversationalRetrievalChain builder
-│   └─ cli.py              # Simple command‑line UI
-├─ data/                   # Example documents (Markdown, PDFs, etc.)
-├─ tests/                  # Unit and integration tests
-├─ Dockerfile
-├─ requirements.txt
-├─ README.md               # <‑ This file
-└─ .github/                # CI workflows
+├─ .env                 # environment variables (not committed)
+├─ app.py               # entry‑point for the interactive demo
+├─ requirements.txt     # Python dependencies
+├─ src/
+│   ├─ chatbot.py       # Chatbot class (core RAG logic)
+│   ├─ retriever.py     # Helper to build a VectorStoreRetriever
+│   └─ utils.py         # Misc helpers (document loading, chunking)
+├─ tests/
+│   └─ test_chatbot.py  # unit tests for the Chatbot class
+├─ data/                # optional folder for raw documents
+└─ README.md            # <-- you are reading this file
 ```
 
 ---
 
-## How It Works
+## 🧪 Testing
 
-### RAG Pipeline
-
-1. **Document Ingestion** – Documents are loaded, split into chunks, and embedded using a chosen embedding model (e.g., `OpenAIEmbeddings`).
-2. **Vector Store Creation** – Embeddings are stored in a vector DB (FAISS by default).  The store provides a `Retriever` that returns the most relevant chunks for a query.
-3. **Conversational Retrieval Chain** – LangChain combines the retriever with an LLM. The chain formats a prompt that includes retrieved context and the chat history, then calls the LLM to produce a response.
-
-### Memory & Conversation History
-
-`ConversationBufferMemory` is used so the LLM can see previous exchanges.  This enables the bot to maintain context across turns without re‑retrieving the entire history.
-
----
-
-## Customization Guide
-
-### Swapping the LLM
-
-Edit `chatbot/config.py`:
-```python
-from langchain.llms import OpenAI, HuggingFaceHub
-
-# Example: switch to a HuggingFace model
-LLM = HuggingFaceHub(repo_id="google/flan-t5-xl", model_kwargs={"temperature": 0.7})
-```
-
-All other components remain unchanged.
-
-### Using a Different Vector Store
-
-Replace the FAISS implementation with Chroma, Pinecone, or any LangChain‑compatible store:
-```python
-from langchain.vectorstores import Chroma
-
-VECTOR_STORE = Chroma(embedding_function=EMBEDDINGS, persist_directory="./chroma_db")
-```
-
-Remember to adjust the `requirements.txt` if the new store introduces extra dependencies.
-
-### Adding Tools & Functions
-
-LangChain supports tool‑calling.  To add a custom tool (e.g., a calculator):
-```python
-from langchain.agents import tool
-
-@tool
-def calculator(expression: str) -> str:
-    """Evaluates a mathematical expression and returns the result."""
-    return str(eval(expression))
-
-# Register the tool in the chain
-CHAIN = ConversationalRetrievalChain.from_llm(
-    llm=LLM,
-    retriever=RETRIEVER,
-    memory=MEMORY,
-    callbacks=[],
-    verbose=True,
-    return_source_documents=True,
-    # Add tools here
-    tools=[calculator],
-)
-```
-
----
-
-## Testing
+The repository includes a minimal test suite using `pytest`.
 
 ```bash
-pytest -v
+pip install pytest
+pytest -q
 ```
 
-The test suite covers:
-- Document loading and chunking
-- Vector store indexing & retrieval
-- End‑to‑end generation using a mock LLM
+Feel free to add more tests covering new data loaders, custom prompts, or alternative LLM back‑ends.
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-We welcome contributions! Please follow these steps:
-1. Fork the repository.
-2. Create a feature branch (`git checkout -b feature/awesome‑feature`).
-3. Write tests for your changes.
-4. Ensure the test suite passes (`pytest`).
-5. Submit a Pull Request with a clear description of the change.
+Contributions are welcome! Follow these steps:
 
-Please adhere to the existing code style (PEP 8) and include documentation updates when adding new functionality.
+1. **Fork the repository** and clone your fork.
+2. **Create a feature branch** (`git checkout -b feature/awesome‑feature`).
+3. **Write code** and add/modify tests as needed.
+4. **Run the test suite** (`pytest`).
+5. **Commit** with a clear message following the Conventional Commits spec.
+6. **Open a Pull Request** targeting the `main` branch.
 
----
-
-## License
-
-This project is licensed under the **MIT License** – see the `LICENSE` file for details.
+Please adhere to the existing code style (Black, isort) and include documentation updates when adding new functionality.
 
 ---
 
+## 📄 License
+
+Distributed under the **MIT License**. See `LICENSE` for more information.
+
 ---
 
-*Happy building with LangChain!*
+## 📚 Additional Resources
+
+- **LangChain Documentation** – https://python.langchain.com/
+- **RAG Primer** – https://python.langchain.com/docs/use_cases/rag
+- **Vector Store Options** – FAISS, Chroma, Pinecone, Weaviate, Milvus, etc.
+- **Prompt Engineering Guide** – https://python.langchain.com/docs/concepts/prompts
+
+---
+
+*Happy coding!*
