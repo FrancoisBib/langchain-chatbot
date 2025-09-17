@@ -1,216 +1,212 @@
-# LangChain Chatbot with Retrieval‑Augmented Generation (RAG)
+# LangChain Chatbot
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
-[![LangChain](https://img.shields.io/badge/langchain-0.2%2B-green.svg)](https://github.com/langchain-ai/langchain)
+## Overview
 
-## 📖 Overview
+**LangChain‑Chatbot** is a minimal yet extensible reference implementation of a conversational AI assistant built on top of **[LangChain](https://github.com/hwchase17/langchain)**.  It demonstrates how to combine:
 
-`langchain-chatbot` is a **reference implementation** of a conversational AI assistant built on top of **LangChain** and powered by **Retrieval‑Augmented Generation (RAG)**. The bot can:
-- Answer questions using a private knowledge base (PDFs, markdown, CSV, …).
-- Keep context across turns using LangChain's `ConversationChain`.
-- Switch seamlessly between **retrieval** (searching the vector store) and **generation** (LLM response) based on the user query.
+- **Large Language Models (LLMs)** for natural language generation.
+- **Retrieval‑Augmented Generation (RAG)** pipelines that fetch relevant context from external knowledge sources.
+- **Memory** mechanisms to maintain multi‑turn conversation state.
 
-The repository showcases best practices for:
-- Prompt engineering with LangChain `ChatPromptTemplate`.
-- Vector store management (FAISS, Chroma, Pinecone, …).
-- Streaming responses and tool‑use (e.g., web‑search, calculator).
-- Testing and CI for LLM‑centric code.
+The repository is deliberately lightweight so developers can quickly grasp the core concepts, then extend the bot with custom retrievers, tools, or UI layers.
 
 ---
 
-## ✨ Features
+## Table of Contents
 
-| Feature | Description |
-|---------|-------------|
-| **RAG pipeline** | Documents → embeddings → vector store → similarity search → LLM generation |
-| **Multi‑modal support** | Text, PDFs, markdown, CSV – easy to plug new loaders |
-| **Chat memory** | `ConversationBufferMemory` keeps dialogue context |
-| **Streaming output** | Real‑time token streaming to the UI (FastAPI/WebSocket) |
-| **Modular architecture** | Separate packages for `retrievers`, `llms`, `prompts`, `api` |
-| **Extensible** | Swap LLMs (OpenAI, Anthropic, Ollama, HuggingFace) and vector stores with a single config file |
-| **Testing utilities** | Mock LLMs and vector stores for unit tests |
-| **Docker support** | Ready‑to‑run container for reproducible environments |
+1. [Features](#features)
+2. [Architecture Overview](#architecture-overview)
+3. [Getting Started](#getting-started)
+   - [Prerequisites](#prerequisites)
+   - [Installation](#installation)
+   - [Running the Demo](#running-the-demo)
+4. [Configuration](#configuration)
+5. [Extending the Bot](#extending-the-bot)
+6. [Testing](#testing)
+7. [Contributing](#contributing)
+8. [License](#license)
 
 ---
 
-## 🚀 Quick Start
+## Features
+
+- **LLM‑agnostic** – works with OpenAI, Anthropic, Cohere, Llama‑cpp, etc.
+- **RAG support** – plug‑in any `BaseRetriever` (FAISS, Chroma, Pinecone, Elastic, etc.).
+- **Conversation memory** – `ConversationBufferMemory` (or any `BaseMemory`).
+- **Tool integration** – easy to add external tools (e.g., calculator, web search).
+- **Dockerised** – optional Dockerfile for reproducible environments.
+- **CI workflow** – linting, type checking and unit tests.
+
+---
+
+## Architecture Overview
+
+```mermaid
+flowchart TD
+    subgraph User
+        U[User Input]
+    end
+    subgraph Bot[LangChain Chatbot]
+        LLM[LLM]
+        Retriever[Retriever]
+        Memory[Memory]
+        Tools[Tools]
+        LLM -->|Generate response| U
+        U -->|Query| Retriever
+        Retriever -->|Relevant docs| LLM
+        Memory -->|Context| LLM
+        Tools -->|Optional actions| LLM
+    end
+    U --> Bot
+```
+
+- **Retriever** fetches documents based on the user query.
+- **Memory** stores the conversation history and injects it into the prompt.
+- **LLM** receives the combined prompt (user query + retrieved docs + memory) and generates a response.
+- **Tools** (optional) can be called by the LLM to perform actions beyond text generation.
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- Python **3.9+**
-- An LLM API key (OpenAI, Anthropic, etc.)
-- (Optional) `docker` & `docker‑compose` for containerised run
+- **Python ≥ 3.9**
+- An API key for the LLM provider you intend to use (e.g., `OPENAI_API_KEY`).
+- (Optional) Vector store backend if you want to use a persistent retriever.
 
-### 1. Clone the repository
+### Installation
 
 ```bash
+# Clone the repository
 git clone https://github.com/your-org/langchain-chatbot.git
 cd langchain-chatbot
-```
 
-### 2. Install dependencies
+# Create a virtual environment (recommended)
+python -m venv .venv
+source .venv/bin/activate   # on Windows use `.venv\Scripts\activate`
 
-```bash
-# Using poetry (recommended)
-poetry install
-# Or with pip
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Set environment variables
+> **Tip:** The project uses `poetry` as an alternative dependency manager. Run `poetry install` if you prefer.
 
-Create a `.env` file at the project root:
+### Running the Demo
+
+A minimal interactive CLI is provided:
+
+```bash
+python -m chatbot.main
+```
+
+You will be prompted for a question. The bot will retrieve relevant passages from the sample dataset (`data/documents/`) and answer using the configured LLM.
+
+To launch the optional FastAPI server:
+
+```bash
+uvicorn chatbot.api:app --reload
+```
+
+Visit `http://127.0.0.1:8000/docs` for the OpenAPI UI.
+
+---
+
+## Configuration
+
+Configuration is handled via **Pydantic** settings (`chatbot/config.py`).  Environment variables are the primary source of truth:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `LLM_PROVIDER` | Which LLM backend to use (`openai`, `anthropic`, `cohere`, `llama_cpp`, …) | `openai` |
+| `OPENAI_API_KEY` | API key for OpenAI (required if `LLM_PROVIDER=openai`) | `sk-…` |
+| `RETRIEVER_TYPE` | Type of vector store (`faiss`, `chroma`, `pinecone`, `elastic`) | `faiss` |
+| `EMBEDDING_MODEL` | Embedding model name for the retriever | `text-embedding-ada-002` |
+| `MEMORY_TYPE` | Memory implementation (`buffer`, `summary`, `conversation`) | `buffer` |
+
+You can create a `.env` file at the project root:
 
 ```dotenv
-# LLM provider – e.g., openai, anthropic, ollama
 LLM_PROVIDER=openai
-# Corresponding API key
-OPENAI_API_KEY=sk-*****
-# Choose a vector store (faiss, chroma, pinecone)
-VECTOR_STORE=faiss
-# Path to your knowledge‑base folder (see docs/knowledge/)
-DOCS_PATH=./docs/knowledge
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxx
+RETRIEVER_TYPE=faiss
+EMBEDDING_MODEL=text-embedding-ada-002
+MEMORY_TYPE=buffer
 ```
 
-### 4. Load your knowledge base
-
-```bash
-python scripts/load_documents.py --source ./docs/knowledge
-```
-This will:
-1. Crawl the folder, extract text with LangChain loaders.
-2. Compute embeddings (default `OpenAIEmbeddings`).
-3. Persist the vector store under `./vector_store/`.
-
-### 5. Run the chatbot server
-
-```bash
-uvicorn app.main:app --reload
-```
-Open your browser at `http://localhost:8000/docs` to interact via the autogenerated FastAPI UI, or integrate the WebSocket endpoint into your front‑end.
+The settings are automatically loaded on import.
 
 ---
 
-## 🛠️ Installation (Library usage)
+## Extending the Bot
 
-If you only need the **Python package** (e.g., to embed the bot in another project):
+### Adding a New Retriever
 
-```bash
-pip install langchain-chatbot
-```
+1. Implement a class inheriting from `langchain.retrievers.base.BaseRetriever`.
+2. Register it in `chatbot/retrievers/__init__.py`.
+3. Update the `RETRIEVER_TYPE` mapping in `chatbot/config.py`.
+
+### Adding a Tool
+
+Create a tool following LangChain's `Tool` interface, e.g. a weather API:
 
 ```python
-from langchain_chatbot import Chatbot, Config
+from langchain.tools import BaseTool
 
-cfg = Config(
-    llm_provider="openai",
-    api_key="sk-...",
-    vector_store="faiss",
-    docs_path="./my_docs",
-)
-bot = Chatbot(cfg)
-response = bot.ask("Explain the benefits of RAG.")
-print(response)
+class WeatherTool(BaseTool):
+    name = "weather"
+    description = "Get the current weather for a city."
+
+    def _run(self, city: str) -> str:
+        # call external API …
+        return f"The weather in {city} is sunny."
 ```
+
+Add the tool to the `toolkit` in `chatbot/main.py` and the LLM will be able to invoke it.
 
 ---
 
-## 📂 Project Structure
+## Testing
 
-```
-langchain-chatbot/
-├─ app/                     # FastAPI entry point & WebSocket handlers
-│   ├─ main.py
-│   └─ routes.py
-├─ langchain_chatbot/       # Core library
-│   ├─ __init__.py
-│   ├─ bot.py               # High‑level Chatbot class
-│   ├─ config.py            # Pydantic settings
-│   ├─ retrievers/          # Vector store wrappers
-│   ├─ llms/                # LLM adapters (OpenAI, Anthropic, …)
-│   └─ prompts/             # Prompt templates & utilities
-├─ scripts/                 # Helper scripts (document loading, indexing)
-│   └─ load_documents.py
-├─ tests/                   # Unit & integration tests
-│   └─ test_bot.py
-├─ docs/                    # Example knowledge‑base files
-├─ .env.example
-├─ pyproject.toml / requirements.txt
-└─ README.md                # ← you are here
-```
-
----
-
-## 🧩 How RAG Works in This Repo
-
-1. **Document ingestion** – LangChain loaders (`UnstructuredFileLoader`, `PDFMinerLoader`, …) convert raw files to plain text.
-2. **Chunking** – Text is split with `RecursiveCharacterTextSplitter` (default chunk size 1000, overlap 200).
-3. **Embedding** – Each chunk is turned into a dense vector using the configured embedding model.
-4. **Vector store** – Vectors are stored in a chosen backend (FAISS by default) and persisted on disk.
-5. **Retrieval** – At query time, the user prompt is embedded and the *k* most similar chunks are fetched.
-6. **Prompt composition** – Retrieved passages are injected into a `ChatPromptTemplate` along with the conversation history.
-7. **Generation** – The LLM produces a response that is both **grounded** in the retrieved context and **aware** of the dialogue state.
-
-The separation of concerns makes it trivial to swap any stage (e.g., replace FAISS with Pinecone, or use `SentenceTransformers` embeddings).
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. **Fork** the repository and create a feature branch.
-2. Ensure code style with `ruff` and type‑check with `mypy`.
-3. Add or update tests in the `tests/` folder. Run the full suite with:
-   ```bash
-   pytest -q
-   ```
-4. Update the documentation (`README.md` or docstrings) as needed.
-5. Submit a Pull Request with a clear description of the change.
-
-### Development workflow
+The project includes a suite of unit tests using **pytest**:
 
 ```bash
-# Install dev dependencies
-poetry install --with dev
-# Run the linter & type checker
+pytest -q
+```
+
+Run the type‑checking and linting steps as part of CI:
+
+```bash
+mypy .
 ruff check .
-mypy langchain_chatbot
-# Run tests
-pytest
-```
-
-### Code of Conduct
-
-Please adhere to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
-
----
-
-## 📦 Release & Versioning
-
-We use **Semantic Versioning** (`MAJOR.MINOR.PATCH`). To publish a new version:
-
-```bash
-poetry version minor   # or patch / major
-git tag -a vX.Y.Z -m "Release vX.Y.Z"
-git push --tags
-poetry build && poetry publish
 ```
 
 ---
 
-## 📄 License
+## Contributing
 
-This project is licensed under the **MIT License** – see the [LICENSE](LICENSE) file for details.
+Contributions are welcome! Please follow these steps:
+
+1. **Fork** the repository.
+2. Create a **feature branch** (`git checkout -b feat/your-feature`).
+3. Write tests for new functionality.
+4. Ensure the existing test suite passes.
+5. Open a **Pull Request** with a clear description of the changes.
+
+Read the full contribution guidelines in `CONTRIBUTING.md`.
 
 ---
 
-## 🙏 Acknowledgements
+## License
 
-- The **LangChain** community for the powerful abstractions.
-- **OpenAI**, **Anthropic**, and other LLM providers for their APIs.
-- Contributors of the underlying vector‑store libraries (FAISS, Chroma, Pinecone).
+Distributed under the **MIT License**. See `LICENSE` for more information.
+
+---
+
+## Acknowledgements
+
+- The LangChain team for the powerful framework.
+- The open‑source community for vector store backends and embedding models.
 
 ---
 
