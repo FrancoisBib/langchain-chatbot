@@ -1,216 +1,181 @@
-# LangChain‑Chatbot
+# LangChain Chatbot
 
-**LangChain‑Chatbot** is a minimal yet extensible reference implementation of a Retrieval‑Augmented Generation (RAG) chatbot built on top of **[LangChain](https://python.langchain.com/)**.  It demonstrates how to combine large language models (LLMs), vector stores, and custom tooling to create a conversational AI that can answer questions with up‑to‑date knowledge from arbitrary document collections.
+## Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Advanced Usage](#advanced-usage)
+- [Retrieval‑Augmented Generation (RAG)](#retrieval-augmented-generation-rag)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## Table of Contents
+## Overview
 
-- [Features](#features)
-- [Architecture Overview](#architecture-overview)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the Demo](#running-the-demo)
-- [Usage Guide](#usage-guide)
-  - [Creating a Vector Store](#creating-a-vector-store)
-  - [Defining the Retrieval Chain](#defining-the-retrieval-chain)
-  - [Running a Conversation](#running-a-conversation)
-- [Configuration](#configuration)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [Roadmap](#roadmap)
-- [License](#license)
+`langchain-chatbot` is a **modular, extensible chatbot** built on top of **[LangChain](https://github.com/langchain-ai/langchain)**. It demonstrates how to combine LLMs, memory, and external knowledge sources using the **Retrieval‑Augmented Generation (RAG)** pattern. The project is deliberately lightweight so developers can focus on the core concepts while having a production‑ready baseline to extend.
 
 ---
 
 ## Features
 
-- **RAG‑enabled chatbot** – queries are enriched with relevant document snippets retrieved from a vector store.
-- **Modular LangChain components** – easy to swap LLMs, embeddings, retrievers, or memory back‑ends.
-- **Support for multiple document types** – PDF, Markdown, plain text, and CSV out of the box.
-- **Dockerised development environment** – reproducible builds and isolated dependencies.
-- **Extensive unit‑test suite** – ensures reliability when extending the code base.
-- **Clear contribution guidelines** – encourages community extensions and bug fixes.
+- **LLM‑agnostic** – works with OpenAI, Anthropic, Cohere, Llama‑2, etc. (any LangChain‑compatible model).
+- **Memory support** – conversation history persisted in‑memory or via Redis/SQL back‑ends.
+- **RAG pipeline** – document ingestion, vector store indexing, similarity search, and context stitching.
+- **Plug‑and‑play tools** – tool‑calling, function calling, and custom tool integration.
+- **Dockerised development** – ready‑to‑run container with all dependencies.
+- **Extensive tests** – unit and integration tests using `pytest` and `langchain‑testutils`.
 
 ---
 
-## Architecture Overview
+## Architecture
 
 ```mermaid
 flowchart TD
-    A[User Input] --> B[Chat Prompt Template]
-    B --> C[LLM (e.g., OpenAI, Anthropic)]
-    C --> D[LangChain Chain]
-    D --> E[Retriever]
-    E --> F[Vector Store (FAISS / Pinecone / Chroma)]
-    F --> G[Document Embeddings]
-    D --> H[Conversation Memory]
-    H --> I[Response Formatting]
+    A[User Input] --> B{Router}
+    B -->|LLM| C[LLM Chain]
+    B -->|Tool| D[Tool/Function]
+    C --> E[Memory]
+    C --> F[Retriever]
+    F --> G[Vector Store]
+    G --> H[Document Loader]
+    E --> I[Response]
+    D --> I
     I --> A
 ```
 
-1. **User Input** – The raw message entered by the user.
-2. **Prompt Template** – Constructs a prompt that includes retrieved context and conversation history.
-3. **LLM** – Generates a response based on the enriched prompt.
-4. **Retriever** – Pulls the most relevant documents from the vector store.
-5. **Vector Store** – Stores embeddings of the source documents for fast similarity search.
-6. **Memory** – Persists conversation state across turns (optional).
+- **Router** decides whether the query should be answered directly by the LLM or requires a tool (e.g., web search, calculator).
+- **Retriever** fetches relevant documents from a vector store (FAISS, Chroma, Pinecone, etc.).
+- **Memory** stores past interactions to provide context.
+- **LLM Chain** combines the retrieved context with the user prompt and sends it to the LLM.
 
 ---
 
-## Getting Started
+## Installation
 
 ### Prerequisites
+- Python **3.9+**
+- `git`
+- (Optional) Docker & Docker‑Compose for containerised workflow
 
-- **Python ≥ 3.9**
-- **Poetry** (or pip) for dependency management
-- An API key for the LLM you plan to use (e.g., `OPENAI_API_KEY`)
-- Optional: Docker & Docker‑Compose if you prefer containerised execution
-
-### Installation
-
+### Steps
 ```bash
 # Clone the repository
-git clone https://github.com/your‑org/langchain-chatbot.git
+git clone https://github.com/your-org/langchain-chatbot.git
 cd langchain-chatbot
 
-# Install dependencies using Poetry (recommended)
-poetry install
-# Or with pip
+# Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # on Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### Running the Demo
+#### Environment variables
+Create a `.env` file at the project root:
+```dotenv
+# LLM provider (OPENAI, ANTHROPIC, COHERE, ...)
+LLM_PROVIDER=OPENAI
+OPENAI_API_KEY=sk-...
 
-The repository ships with a small demo dataset (`data/faq.md`).  To start the chatbot locally:
+# Vector store configuration (example using Chroma)
+VECTOR_STORE=chroma
+CHROMA_PERSIST_DIR=./chroma_data
+```
+
+---
+
+## Quick Start
 
 ```bash
-# Build the vector store from the demo documents
-python scripts/build_vector_store.py --source data/faq.md
-
-# Launch the interactive CLI chatbot
-python scripts/chat_cli.py
+# Run the chatbot locally
+python -m src.main
 ```
 
-You should see a prompt like `>>>`.  Type a question and watch the RAG‑augmented response.
+You will be presented with an interactive REPL. Try a simple query:
+```
+> What are the main benefits of Retrieval‑Augmented Generation?
+```
+The bot will retrieve relevant documents from the default demo corpus, augment the LLM prompt, and return a concise answer.
 
 ---
 
-## Usage Guide
+## Advanced Usage
 
-### Creating a Vector Store
-
+### Custom Document Loader
+Replace the default loader with your own (e.g., PDFs, CSVs, websites):
 ```python
-from langchain.document_loaders import TextLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-
-# Load and split documents
-loader = TextLoader('data/faq.md')
+from src.loaders import MyCustomLoader
+loader = MyCustomLoader(path="./data")
 documents = loader.load()
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-chunks = text_splitter.split_documents(documents)
-
-# Generate embeddings and store them
-embeddings = OpenAIEmbeddings()
-vector_store = FAISS.from_documents(chunks, embeddings)
-vector_store.save_local('vector_store')
 ```
 
-### Defining the Retrieval Chain
-
+### Switching Vector Stores
 ```python
-from langchain.chains import RetrievalQA
-from langchain.llms import OpenAI
-from langchain.prompts import PromptTemplate
-
-retriever = vector_store.as_retriever(search_kwargs={"k": 4})
-prompt = PromptTemplate.from_template(
-    "Answer the question using the provided context.\n\nContext:\n{context}\n\nQuestion: {question}\nAnswer:" 
-)
-
-qa_chain = RetrievalQA.from_chain_type(
-    llm=OpenAI(),
-    chain_type="stuff",
-    retriever=retriever,
-    return_source_documents=True,
-    chain_type_kwargs={"prompt": prompt},
-)
+from langchain.vectorstores import FAISS
+vector_store = FAISS.from_documents(documents, embedding)
 ```
+Update `VECTOR_STORE` in `.env` to `faiss` and the chatbot will automatically use the new store.
 
-### Running a Conversation
-
+### Adding Tools
 ```python
-while True:
-    user_input = input(">>> ")
-    if user_input.lower() in {"exit", "quit"}:
-        break
-    result = qa_chain({"query": user_input})
-    print("\nAnswer:", result["result"], "\n")
-    # Optional: display source snippets for debugging
-    for doc in result["source_documents"]:
-        print("-", doc.page_content[:200], "…")
+from src.tools import CalculatorTool, SearchTool
+tools = [CalculatorTool(), SearchTool()]
+router = Router(tools=tools)
 ```
+Now the bot can perform calculations or web searches when the LLM requests them.
 
 ---
 
-## Configuration
+## Retrieval‑Augmented Generation (RAG)
 
-All configurable options are stored in `config.yaml`.  Example snippet:
+RAG combines **retrieval** (searching a knowledge base) with **generation** (LLM response). This approach:
+1. **Improves factual accuracy** – the LLM grounds its answer in real documents.
+2. **Reduces hallucinations** – the model sees the exact source text.
+3. **Enables domain‑specific knowledge** without fine‑tuning the model.
 
-```yaml
-llm:
-  provider: openai
-  model: gpt-4o-mini
-  temperature: 0.0
+### How it works in this repo
+1. **Document ingestion** – `src/loaders/` parses raw files into `Document` objects.
+2. **Embedding** – each document is embedded using the model’s embedding API.
+3. **Indexing** – embeddings are stored in a vector store for fast similarity search.
+4. **Query** – user input is embedded, the nearest documents are fetched, and their content is concatenated.
+5. **Prompt construction** – the retrieved snippets are injected into a system prompt template.
+6. **LLM generation** – the LLM produces the final answer.
 
-retriever:
-  top_k: 4
-  distance_metric: cosine
-
-vector_store:
-  type: faiss
-  persist_directory: vector_store
-```
-
-You can override any setting at runtime via environment variables (e.g., `LLM_MODEL=gpt-4o`).  See `scripts/configure.py` for the parsing logic.
+### Tips for Better RAG
+- **Chunk size**: 500‑1000 tokens per chunk works well for most models.
+- **Metadata**: store source IDs and timestamps to enable citations.
+- **Hybrid search**: combine dense vectors with BM25 for improved recall.
 
 ---
 
 ## Testing
 
-The project includes a pytest suite covering the core RAG pipeline.
-
 ```bash
-poetry run pytest
+# Run the full test suite
+pytest -v
 ```
-
-Add new tests in the `tests/` directory to cover custom retrievers or prompt templates.
+The repository includes:
+- Unit tests for loaders, vector store adapters, and routing logic.
+- Integration tests that spin up a temporary LLM mock.
+- Coverage reports (`pytest --cov=src`).
 
 ---
 
 ## Contributing
 
-We welcome contributions!  Follow these steps:
+We welcome contributions! Please follow these steps:
+1. **Fork** the repository.
+2. **Create a feature branch** (`git checkout -b feat/your-feature`).
+3. **Write tests** for new functionality.
+4. **Run linting** (`ruff check .` and `black .`).
+5. **Submit a Pull Request** with a clear description of the change.
 
-1. **Fork** the repository and create a feature branch.
-2. Install the development dependencies (`poetry install --with dev`).
-3. Ensure all tests pass (`poetry run pytest`).
-4. Add or update documentation as needed – the README should always reflect the current state of the code.
-5. Submit a **Pull Request** with a clear description of the change.
-
-Please adhere to the **PEP 8** style guide and run `black .` before committing.
-
----
-
-## Roadmap
-
-- [ ] Support for hybrid retrieval (BM25 + vector similarity).
-- [ ] Integration with **LangChain Hub** for reusable chain components.
-- [ ] Web UI built with **Streamlit** for non‑technical users.
-- [ ] Automated deployment scripts for AWS Lambda / Azure Functions.
+See `CONTRIBUTING.md` for the full guideline and code‑style conventions.
 
 ---
 
@@ -220,4 +185,8 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 
 ---
 
-*Happy coding!*
+## Acknowledgements
+
+- **LangChain** – the core framework enabling composable LLM applications.
+- **FAISS / Chroma / Pinecone** – vector store back‑ends used for similarity search.
+- **OpenAI, Anthropic, Cohere** – LLM providers supported out‑of‑the‑box.
