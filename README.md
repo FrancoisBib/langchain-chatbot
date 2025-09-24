@@ -1,202 +1,161 @@
-# LangChain Chatbot with Retrieval‑Augmented Generation (RAG)
+# LangChain Chatbot
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9%2B-brightgreen.svg)](https://www.python.org/downloads/)
+## 📖 Overview
 
-A **minimal yet extensible** example of building a conversational chatbot powered by **LangChain** and **Retrieval‑Augmented Generation (RAG)**. The bot can answer questions over a custom knowledge base, combine LLM reasoning with vector‑store retrieval, and be easily adapted to new data sources or LLM providers.
+`langchain-chatbot` is a minimal yet powerful example of building a **retrieval‑augmented generation (RAG) chatbot** using the **LangChain** framework. The project demonstrates how to:
 
----
+- Connect a language model (LLM) to a vector store for context retrieval.
+- Define a flexible chain that combines retrieval, prompting, and generation.
+- Deploy the chatbot locally or in a containerised environment.
+- Extend the solution with custom components, document loaders, and evaluation tools.
 
-## Table of Contents
-
-- [Features](#features)
-- [Architecture Overview](#architecture-overview)
-- [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the Demo](#running-the-demo)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [Extending the Bot](#extending-the-bot)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [License](#license)
+The repository is intentionally lightweight so developers can focus on the core concepts of **LangChain**, **RAG**, and **chatbot engineering**.
 
 ---
 
-## Features
+## 🛠️ Prerequisites
 
-- **LangChain** integration for LLM orchestration.
-- **RAG pipeline** using a vector store (FAISS by default) to retrieve relevant documents.
-- Simple **CLI** and **FastAPI** interfaces for interactive testing.
-- **Modular design** – swap LLMs, embeddings, or vector stores with a single line change.
-- Docker support for reproducible environments.
+| Requirement | Version |
+|-------------|---------|
+| Python      | `>=3.9` |
+| Poetry (optional) | `>=1.5` |
+| OpenAI API key (or any compatible LLM provider) | – |
+| `pip` or `poetry` for dependency management | – |
 
----
-
-## Architecture Overview
-
-```
-User Query → Prompt Template → LLM (e.g., OpenAI gpt‑4) 
-               │                               │
-               └─► Retrieval Chain (FAISS) ◄─┘
-                     │
-                     └─► Retrieved Documents (chunks)
-```
-
-1. **Prompt Template** – Formats the user question together with retrieved context.
-2. **Retriever** – Queries a vector store built from your knowledge base.
-3. **LLM** – Generates a response using the combined prompt and context.
-4. **Chain** – LangChain ties the components together, handling token limits and response post‑processing.
+> **Note**: The code is LLM‑agnostic. You can swap the OpenAI provider for Anthropic, Cohere, Ollama, etc., by adjusting the `LLM` configuration in `config.py`.
 
 ---
 
-## Quick Start
+## 🚀 Installation
 
-### Prerequisites
-
-- Python **3.9** or newer.
-- An OpenAI API key (or another LLM provider – see *Configuration*).
-- `git` installed.
-
-### Installation
-
+### 1. Clone the repository
 ```bash
-# Clone the repository
 git clone https://github.com/your-org/langchain-chatbot.git
 cd langchain-chatbot
+```
 
-# Create a virtual environment (recommended)
+### 2. Install dependencies
+You can use **Poetry** (recommended) or **pip**.
+
+#### Using Poetry
+```bash
+poetry install
+poetry shell   # activate the virtual environment
+```
+
+#### Using pip
+```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
+source .venv/bin/activate   # on Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Running the Demo
-
-1. **Prepare a knowledge base** – place your text documents (PDF, TXT, Markdown, etc.) inside the `data/` folder.
-2. **Create the vector store**:
-   ```bash
-   python scripts/build_index.py --source data/ --store faiss
-   ```
-   This script splits documents, creates embeddings (default: `OpenAIEmbeddings`), and stores them in `index/faiss/`.
-3. **Start the chatbot** (CLI version):
-   ```bash
-   python -m chatbot.cli
-   ```
-   Or launch the FastAPI server for a web UI:
-   ```bash
-   uvicorn api.main:app --reload
-   ```
-   Visit `http://127.0.0.1:8000/docs` for the interactive Swagger UI.
+### 3. Set environment variables
+Create a `.env` file at the project root (or export variables directly) with the required keys:
+```dotenv
+OPENAI_API_KEY=sk-...
+# Optional – vector store configuration (default: ChromaDB in ./data)
+CHROMA_PERSIST_DIR=./data/chroma
+```
 
 ---
 
-## Project Structure
-
+## 📂 Project Structure
 ```
 langchain-chatbot/
-├─ api/                     # FastAPI entry point
-│   └─ main.py
-├─ chatbot/                # Core chatbot logic
-│   ├─ __init__.py
-│   ├─ chain.py            # LangChain RAG chain definition
-│   └─ cli.py              # Simple REPL interface
-├─ data/                    # Sample knowledge‑base files (add yours here)
-├─ index/                   # Generated vector store (git‑ignored)
-├─ scripts/                # Utility scripts (index building, evaluation)
-│   └─ build_index.py
-├─ tests/                  # Unit and integration tests
-│   └─ test_chain.py
-├─ .env.example            # Example environment variables file
-├─ requirements.txt
-├─ README.md                # <‑‑ This file
-└─ pyproject.toml
+├─ src/                     # Core source code
+│   ├─ config.py            # Global configuration & env loading
+│   ├─ loaders/             # Document loaders (PDF, TXT, etc.)
+│   ├─ retrievers/          # Vector store & retrieval logic
+│   ├─ chains/              # LangChain chains (RAG, QA, etc.)
+│   ├─ bot.py               # CLI entry‑point for interactive chat
+│   └─ utils.py             # Helper functions (logging, chunking)
+├─ tests/                   # Unit & integration tests
+├─ data/                    # Persisted vector store & sample docs
+├─ .env.example             # Example env file
+├─ pyproject.toml / requirements.txt
+└─ README.md                # <‑ YOU ARE HERE
 ```
 
 ---
 
-## Configuration
+## 🏃‍♂️ Quick Start (CLI)
 
-The project reads environment variables from a `.env` file (or your shell). Example (`.env.example`):
-
-```dotenv
-# OpenAI
-OPENAI_API_KEY=sk-************************
-
-# Embedding model (default: text-embedding-ada-002)
-OPENAI_EMBEDDING_MODEL=text-embedding-ada-002
-
-# LLM model (default: gpt-4)
-OPENAI_CHAT_MODEL=gpt-4
-
-# Vector store – currently supports 'faiss' or 'chromadb'
-VECTOR_STORE=faiss
-
-# Index path (relative to project root)
-INDEX_PATH=index/faiss/
+Run the chatbot directly from the command line:
+```bash
+python -m src.bot
 ```
 
-You can replace the OpenAI components with any LangChain‑compatible provider (e.g., Cohere, HuggingFace) by editing `chatbot/chain.py` and supplying the appropriate classes.
+The first run will:
+1. Load documents from `data/docs/` (you can replace them with your own).
+2. Split the texts into chunks and embed them using the selected LLM.
+3. Persist the embeddings in a local ChromaDB store.
+4. Start an interactive REPL where you can ask questions.
+
+### Example interaction
+```
+> How does LangChain handle prompt templates?
+[Bot]: LangChain provides a PromptTemplate class that lets you define placeholders ...
+```
 
 ---
 
-## Extending the Bot
+## 🧩 Extending the Bot
 
-### Adding New Document Types
+### Adding New Document Sources
+1. Implement a loader in `src/loaders/` that returns a list of `Document` objects.
+2. Register the loader in `src/config.py` or pass it to the `EmbeddingPipeline`.
 
-1. Install a parser (e.g., `pypdf`, `python-docx`).
-2. Extend `scripts/build_index.py` to handle the new MIME type.
-3. Update the `DocumentLoader` mapping in `chatbot/loader.py` (if you create one).
-
-### Swapping the Vector Store
-
-Replace the `FAISS` import with another store and adjust the `store` argument in `scripts/build_index.py`. Ensure the store implements LangChain's `VectorStore` interface.
+### Switching Vector Stores
+The default store is **ChromaDB**, but LangChain supports FAISS, Weaviate, Pinecone, etc.
+```python
+from langchain.vectorstores import FAISS
+vectorstore = FAISS.from_documents(docs, embeddings)
+```
+Replace the `Chroma` instance in `src/retrievers/__init__.py`.
 
 ### Custom Prompt Templates
-
-Edit `chatbot/chain.py` – the `PROMPT_TEMPLATE` constant holds the Jinja‑style prompt. You can add system messages, few‑shot examples, or chain‑of‑thought instructions.
+Edit `src/chains/rag_chain.py` and modify the `PromptTemplate` string to suit your domain.
 
 ---
 
-## Testing
+## 🧪 Testing
 
 Run the test suite with:
-
 ```bash
-pytest -v
+pytest -q
 ```
-
 The tests cover:
-- Document loading and chunking.
-- Retrieval correctness.
-- End‑to‑end chain execution with a mock LLM.
-
-Add new tests under `tests/` to protect future contributions.
+- Document loading and chunking
+- Vector store creation & similarity search
+- End‑to‑end RAG chain response generation
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-Contributions are welcome! Follow these steps:
+We welcome contributions! Please follow these steps:
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feat/your-feature`).
+3. Write tests for new functionality.
+4. Ensure all tests pass (`pytest`).
+5. Open a Pull Request with a clear description of the change.
 
-1. **Fork** the repository.
-2. Create a feature branch: `git checkout -b feat/your-feature`.
-3. Keep the code style consistent – the project uses **black** and **ruff**.
-   ```bash
-   pip install black ruff
-   black .
-   ruff check .
-   ```
-4. Write or update documentation (README, docstrings) as needed.
-5. Submit a **pull request** with a clear description of the change.
-
-Please ensure that all tests pass and that you add tests for new functionality.
+### Code Style
+- Use **black** and **isort** for formatting.
+- Follow the existing module layout.
+- Keep docstrings concise and include type hints.
 
 ---
 
-## License
+## 📚 Resources
 
-This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
+- **LangChain Documentation** – https://python.langchain.com/
+- **RAG Primer** – https://arxiv.org/abs/2005.11401
+- **ChromaDB** – https://www.trychroma.com/
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** – see the `LICENSE` file for details.
