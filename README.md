@@ -1,212 +1,158 @@
 # LangChain Chatbot
 
-## Overview
+## 📖 Description
 
-**LangChain‑Chatbot** is a minimal yet extensible reference implementation of a conversational AI assistant built on top of **[LangChain](https://github.com/langchain-ai/langchain)**.  It demonstrates how to combine:
-
-- **Large Language Models (LLMs)** for natural‑language generation.
-- **Retrieval‑Augmented Generation (RAG)** pipelines that fetch relevant context from external knowledge sources.
-- **Tool‑use** (e.g., web search, calculator) to extend the bot’s capabilities.
-
-The repository is intended for developers who want a clear, production‑ready starting point for building custom chatbots, as well as for contributors interested in extending the example with new data sources, agents, or UI components.
+**LangChain‑Chatbot** est un exemple de bot conversationnel basé sur **LangChain** et la technique **RAG (Retrieval‑Augmented Generation)**. Le projet montre comment combiner un modèle de génération de texte (LLM) avec un moteur de recherche de documents afin d’enrichir les réponses du bot avec du contexte provenant de sources externes (documents PDF, bases de connaissances, etc.).
 
 ---
 
-## Table of Contents
+## ✨ Fonctionnalités principales
 
-- [Features](#features)
-- [Quick Start](#quick-start)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Running the Bot](#running-the-bot)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [RAG Workflow Explained](#rag-workflow-explained)
-- [Extending the Bot](#extending-the-bot)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [License](#license)
+- **Intégration LangChain** : utilisation des chaînes (`Chains`), des agents (`Agents`) et des `Retrievers`.
+- **RAG complet** : indexation de documents, recherche sémantique et injection du texte récupéré dans le prompt LLM.
+- **Support de multiples LLM** (OpenAI, Anthropic, Ollama, etc.) via l’interface unifiée de LangChain.
+- **Configuration via fichier YAML** – facile à adapter pour différents modèles, bases de données vectorielles et sources de documents.
+- **Docker** : image prête à être déployée en local ou sur le cloud.
+- **Tests unitaires** pour les composants critiques (indexation, récupération, chaîne de génération).
 
 ---
 
-## Features
+## 🛠️ Prérequis
 
-- **Modular RAG pipeline** – interchangeable retrievers (FAISS, Chroma, Elastic, etc.) and vector stores.
-- **Support for multiple LLM providers** – OpenAI, Anthropic, Cohere, HuggingFace, etc.
-- **Tool integration** – built‑in calculator, web‑search, and custom Python functions.
-- **Streaming chat UI** – optional FastAPI + WebSocket front‑end.
-- **Docker support** – reproducible environment for local development and CI.
-- **Comprehensive tests** – unit and integration tests using `pytest`.
-- **CI/CD** – GitHub Actions workflow for linting, type‑checking, and testing.
+| Outil | Version minimale |
+|-------|------------------|
+| Python | 3.9 |
+| pip | 22.0 |
+| Docker (optionnel) | 20.10 |
+| Une clé API pour le LLM choisi (ex. `OPENAI_API_KEY`) |
 
 ---
 
-## Quick Start
+## 🚀 Installation
 
-### Prerequisites
-
-| Requirement | Version |
-|-------------|---------|
-| Python | `>=3.9,<4.0` |
-| pip | latest (recommended via `python -m pip install --upgrade pip`) |
-| Docker (optional) | `>=20.10` |
-| OpenAI API key (or alternative LLM provider) | – |
-
-### Installation
-
+### 1️⃣ Cloner le dépôt
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/langchain-chatbot.git
+git clone https://github.com/your‑org/langchain-chatbot.git
 cd langchain-chatbot
-
-# Create a virtual environment (optional but recommended)
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -e .[all]
 ```
 
-The optional `all` extra installs the full stack (FAISS, OpenAI, FastAPI, etc.).  See `pyproject.toml` for the complete list.
-
-### Running the Bot
-
-1. **Set environment variables** – create a `.env` file in the project root:
-   ```dotenv
-   OPENAI_API_KEY=sk-xxxxxxx
-   # Optional: other provider keys (ANTHROPIC_API_KEY, COHERE_API_KEY, ...)
-   ```
-2. **Start the FastAPI server** (provides a simple web UI and a REST endpoint):
-   ```bash
-   uvicorn langchain_chatbot.main:app --reload
-   ```
-3. Open your browser at `http://127.0.0.1:8000` and start chatting!
-
-If you prefer a pure CLI experience:
-
+### 2️⃣ Créer un environnement virtuel
 ```bash
-python -m langchain_chatbot.cli
+python -m venv .venv
+source .venv/bin/activate   # sous Linux/macOS
+# .venv\Scripts\activate   # sous Windows
+```
+
+### 3️⃣ Installer les dépendances
+```bash
+pip install -r requirements.txt
+```
+
+### 4️⃣ Configurer les variables d’environnement
+Créez un fichier `.env` à la racine du projet :
+```dotenv
+# Exemple pour OpenAI
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# Si vous utilisez un autre LLM, ajoutez les variables correspondantes
+# Exemple pour Cohere
+COHERE_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+### 5️⃣ (Optionnel) Lancer avec Docker
+```bash
+docker build -t langchain‑chatbot .
+docker run -p 8000:8000 --env-file .env langchain‑chatbot
 ```
 
 ---
 
-## Project Structure
+## 📚 Utilisation
+
+### Indexation de documents
+Le script `scripts/index_documents.py` parcourt le répertoire `data/` et crée un index vectoriel (FAISS par défaut).
+```bash
+python scripts/index_documents.py --source data/ --index_path indexes/faiss.idx
+```
+
+### Démarrer le serveur de chatbot
+```bash
+uvicorn app.main:app --reload
+```
+Le bot sera disponible sur `http://127.0.0.1:8000/docs` (Swagger UI) où vous pourrez tester les endpoints.
+
+### Exemple d’appel via `curl`
+```bash
+curl -X POST http://127.0.0.1:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"question": "Quelles sont les étapes pour créer un pipeline RAG avec LangChain ?"}'
+```
+
+### Interaction via interface web (facultatif)
+Le répertoire `frontend/` contient une petite application React qui consomme l’API. Après avoir installé les dépendances (`npm install`) et lancé `npm start`, vous pouvez discuter avec le bot directement depuis votre navigateur.
+
+---
+
+## 🏗️ Architecture du projet
 
 ```
 langchain-chatbot/
-├─ langchain_chatbot/          # Core package
-│  ├─ __init__.py
-│  ├─ agents/                 # Agent implementations (conversational, tool‑using)
-│  ├─ retrieval/              # Vector store & retriever abstractions
-│  ├─ llm/                    # Wrapper classes for supported LLMs
-│  ├─ tools/                  # Built‑in tool definitions (calculator, search)
-│  ├─ ui/                     # FastAPI routes & optional React front‑end
-│  └─ main.py                 # Entry point for the API server
-├─ tests/                     # Pytest suite
-├─ scripts/                   # Helper scripts (data ingestion, index building)
-├─ Dockerfile                 # Multi‑stage build for production image
-├─ pyproject.toml             # Poetry/PEP‑517 configuration
-├─ README.md                  # ← This file
-└─ .github/                   # CI workflows
+├─ app/                # API FastAPI
+│   ├─ main.py         # Point d’entrée
+│   └─ router.py       # Endpoints /chat, /health
+├─ core/               # Logique métier LangChain
+│   ├─ rag_chain.py    # Chaîne RAG complète
+│   ├─ retriever.py   # Wrapper autour du vecteur store
+│   └─ llm_provider.py # Sélection du LLM selon la config
+├─ data/               # Documents sources (PDF, txt, markdown…)
+├─ indexes/            # Indexes vectoriels générés
+├─ scripts/            # Outils CLI (indexation, nettoyage)
+├─ tests/              # Tests unitaires & d’intégration
+├─ requirements.txt    # Dépendances Python
+├─ Dockerfile          # Image Docker
+└─ README.md           # ← Vous êtes ici
 ```
 
----
-
-## Configuration
-
-Configuration is handled via **Pydantic Settings** (`langchain_chatbot.settings.Settings`).  All settings can be overridden through environment variables or a `.env` file.
-
-Key settings include:
-
-- `LLM_PROVIDER` – `openai`, `anthropic`, `cohere`, `hf` (default: `openai`).
-- `VECTOR_STORE` – `faiss`, `chroma`, `elastic` (default: `faiss`).
-- `RETRIEVER_TOP_K` – number of retrieved documents per query (default: `4`).
-- `MAX_TOKENS` – generation limit for the LLM.
-- `USE_STREAMING` – enable token‑by‑token streaming to the UI.
+- **`core.rag_chain.RAGChain`** orchestre : récupération → formatage du contexte → appel LLM.
+- **`core.retriever.Retriever`** encapsule la logique du vecteur store (FAISS, Chroma, Pinecone, …) et expose une méthode `get_relevant_documents(query, k)`.
+- **`core.llm_provider.LLMProvider`** charge dynamiquement le modèle à partir du fichier `config.yaml`.
 
 ---
 
-## RAG Workflow Explained
+## 🤝 Contribuer
 
-1. **Document Ingestion** – Use `scripts/ingest.py` to load raw text, PDFs, or markdown files into a vector store.
-2. **Embedding Generation** – Embeddings are computed with the same provider as the LLM (e.g., `text-embedding-ada-002`).
-3. **Retrieval** – At query time, the retriever fetches the top‑k most similar chunks.
-4. **Prompt Construction** – Retrieved chunks are injected into a **system prompt** that instructs the LLM to ground its answer in the provided context.
-5. **Generation** – The LLM produces a response, optionally streaming tokens back to the client.
-6. **Tool Invocation** – If the LLM decides a tool is needed (e.g., calculator), the `AgentExecutor` runs the tool and feeds the result back into the next generation step.
+Les contributions sont les bienvenues ! Voici comment commencer :
 
-The architecture follows LangChain’s **`ConversationalRetrievalChain`** pattern, but the code is deliberately kept modular so you can swap any component.
-
----
-
-## Extending the Bot
-
-### Adding a New Data Source
-
-1. Write an ingestion script that yields `Document` objects (`langchain.schema.Document`).
-2. Register the script in `scripts/__init__.py` and add a CLI entry point if desired.
-3. Update `settings.py` to include any new environment variables (e.g., `S3_BUCKET`).
-
-### Implementing a Custom Tool
-
-```python
-from langchain.tools import BaseTool
-
-class WeatherTool(BaseTool):
-    name = "weather"
-    description = "Get the current weather for a given city."
-
-    def _run(self, city: str) -> str:
-        # Call external API or mock response
-        return f"The weather in {city} is sunny, 23°C."
-```
-
-Add the tool to `langchain_chatbot.tools.__init__` and include it in the `AgentExecutor` construction inside `agents/conversational.py`.
-
----
-
-## Testing
-
-Run the full test suite with:
-
-```bash
-pytest -q
-```
-
-The repository includes:
-
-- **Unit tests** for each module (`tests/unit/`).
-- **Integration tests** that spin up an in‑memory FAISS store and mock LLM responses (`tests/integration/`).
-- **Linting & type‑checking** via `ruff` and `mypy` (executed in CI).
-
----
-
-## Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. **Fork** the repository and clone your fork.
-2. Create a **feature branch**: `git checkout -b feat/your-feature`.
-3. Ensure the code passes all checks:
+1. **Fork** le dépôt et créez une branche feature (`git checkout -b feature/ma‑nouvelle‑fonction`).
+2. Installez les dépendances de développement :
    ```bash
-   pre-commit run --all-files
-   pytest
+   pip install -r dev-requirements.txt
    ```
-4. Open a **Pull Request** with a clear description of the change and reference any related issue.
-5. Make sure to update the documentation (README, docstrings) when adding new functionality.
+3. Assurez‑vous que les tests passent :
+   ```bash
+   pytest -q
+   ```
+4. Ouvrez une **Pull Request** décrivant le problème résolu ou la fonctionnalité ajoutée.
+5. Respectez le style de code : `black`, `isort` et `flake8` sont configurés dans le repo.
 
-See `CONTRIBUTING.md` for detailed guidelines on coding standards, commit messages, and the release process.
+### Guide de contribution rapide
+- **Documentation** : mettez à jour le `README.md` ou les docstrings si vous ajoutez de nouvelles fonctions.
+- **Tests** : chaque nouvelle logique doit être couverte par au moins un test unitaires.
+- **CI** : le pipeline GitHub Actions exécute les tests et le linting automatiquement.
 
 ---
 
-## License
+## 📄 Licence
 
-This project is licensed under the **MIT License** – see the `LICENSE` file for details.
+Ce projet est distribué sous licence **MIT** – voir le fichier `LICENSE` pour plus de détails.
 
 ---
 
-## Acknowledgements
+## 🙏 Remerciements
 
-- The **LangChain** community for the powerful abstractions that make RAG pipelines straightforward.
-- Open‑source vector store projects (FAISS, Chroma) for fast similarity search.
-- All contributors who help improve the example and keep it up‑to‑date with the latest LangChain releases.
+- **LangChain** – pour la bibliothèque puissante qui simplifie la création de pipelines LLM.
+- **FAISS** – pour le moteur de recherche vectorielle ultra‑rapide.
+- La communauté open‑source qui contribue aux modèles de langage et aux outils RAG.
+
+---
+
+*Pour toute question, n’hésitez pas à ouvrir une issue ou à contacter les mainteneurs via le tableau des contributeurs.*
