@@ -1,17 +1,19 @@
-# LangChain Chatbot
+# LangChain Chatbot with Retrieval‑Augmented Generation (RAG)
 
-**LangChain‑Chatbot** is a minimal yet extensible reference implementation of a Retrieval‑Augmented Generation (RAG) chatbot built on top of **LangChain**. It demonstrates how to combine vector stores, LLMs, and prompt engineering to build a conversational AI that can answer questions using both its internal knowledge and external document sources.
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+A minimal, production‑ready example of a **chatbot** built on **[LangChain](https://github.com/hwchase17/langchain)** that leverages **Retrieval‑Augmented Generation (RAG)** to provide up‑to‑date, context‑aware answers.
 
 ---
 
 ## Table of Contents
 
 - [Features](#features)
-- [Architecture Overview](#architecture-overview)
-- [Prerequisites](#prerequisites)
-- [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Running the Bot Locally](#running-the-bot-locally)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Running the Bot](#running-the-bot)
+- [Project Structure](#project-structure)
 - [Testing](#testing)
 - [Contributing](#contributing)
 - [License](#license)
@@ -20,176 +22,170 @@
 
 ## Features
 
-- **RAG pipeline**: Retrieve relevant passages from a vector store and augment LLM generation.
-- **Modular components**: Easy to swap out LLM providers, embedding models, or vector databases.
-- **Streaming responses**: Real‑time token streaming for a smooth chat experience.
-- **Config‑driven**: All major parameters (model, temperature, top‑k, etc.) are configurable via a single `config.yaml`.
-- **Extensible**: Clear interfaces for adding custom retrievers, memory modules, or post‑processing steps.
-
----
-
-## Architecture Overview
-
-```mermaid
-flowchart TD
-    A[User Message] --> B[Prompt Template]
-    B --> C[Retriever (VectorStore)]
-    C --> D[Relevant Documents]
-    D --> E[LLM (LangChain)]
-    E --> F[Chatbot Response]
-    F --> A
-```
-
-1. **Prompt Template** – A LangChain `PromptTemplate` that injects the retrieved context into the LLM prompt.
-2. **Retriever** – Uses embeddings (e.g., OpenAI `text-embedding-ada-002`) stored in a vector DB (FAISS, Chroma, Pinecone, …).
-3. **LLM** – Any LangChain‑compatible LLM (OpenAI, Anthropic, Llama‑Cpp, etc.).
-4. **Streaming** – The response is streamed back to the client using LangChain's `StreamingStdOutCallbackHandler` (or a custom WebSocket handler).
-
----
-
-## Prerequisites
-
-- Python **3.9** or newer
-- An OpenAI API key (or credentials for the LLM provider you intend to use)
-- Optional: Docker & Docker‑Compose if you prefer containerised execution
-
----
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/langchain-chatbot.git
-cd langchain-chatbot
-
-# Create a virtual environment (recommended)
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-> **Tip**: The `requirements.txt` pins versions that are known to work together. If you need the latest LangChain features, bump the version and run `pip install -r requirements.txt` again.
+- **LangChain** integration for prompt management, memory, and chain orchestration.
+- **RAG pipeline** using a vector store (e.g., FAISS, Chroma) to retrieve relevant documents before generation.
+- **Modular design** – separate modules for data ingestion, indexing, retrieval, and chat UI.
+- **Docker support** for reproducible local development.
+- **Extensible** – add new retrievers, LLM providers, or UI front‑ends with minimal changes.
 
 ---
 
 ## Quick Start
 
-Below is a minimal script (`run_chat.py`) that launches the chatbot in the console:
+```bash
+# Clone the repository
+git clone https://github.com/your‑org/langchain-chatbot.git
+cd langchain-chatbot
 
-```python
-import os
-from pathlib import Path
-from langchain.chains import RetrievalQA
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.llms import OpenAI
-from langchain.prompts import PromptTemplate
+# Install dependencies (Python 3.10+ recommended)
+poetry install   # or `pip install -r requirements.txt`
 
-# Load environment variables (e.g., OPENAI_API_KEY)
-from dotenv import load_dotenv
-load_dotenv()
+# Populate the knowledge base (example uses local markdown files)
+python -m scripts.ingest data/
 
-# 1️⃣ Load documents & create vector store (run once)
-# docs = ...  # load your own text files
-# embeddings = OpenAIEmbeddings()
-# vectorstore = FAISS.from_documents(docs, embeddings)
-# vectorstore.save_local("./vectorstore")
-
-# 2️⃣ Load the persisted vector store
-vectorstore = FAISS.load_local("./vectorstore", OpenAIEmbeddings())
-
-# 3️⃣ Define a simple RAG prompt
-prompt = PromptTemplate(
-    input_variables=["question", "context"],
-    template="""You are a helpful assistant. Use the following context to answer the question.
-
-Context: {context}\n\nQuestion: {question}\nAnswer:""",
-)
-
-# 4️⃣ Build the RetrievalQA chain
-qa = RetrievalQA.from_chain_type(
-    llm=OpenAI(temperature=0),
-    retriever=vectorstore.as_retriever(search_kwargs={"k": 4}),
-    chain_type="stuff",
-    return_source_documents=True,
-    combine_documents_chain_kwargs={"prompt": prompt},
-)
-
-# 5️⃣ Interactive loop
-print("🤖 LangChain RAG Chatbot – type 'exit' to quit")
-while True:
-    query = input("\nYou: ")
-    if query.lower() in {"exit", "quit"}:
-        break
-    resp = qa(query)
-    print("\nBot:", resp["result"], "\n")
+# Run the chatbot (default uses OpenAI gpt‑4o, configure your API key below)
+python -m scripts.run_chatbot
 ```
 
-1. **Create the vector store** the first time you run the script (uncomment the block that loads documents).
-2. Subsequent runs will load the persisted store from `./vectorstore`.
-3. Adjust the LLM, temperature, or `k` (number of retrieved chunks) in the script to suit your use‑case.
+Open your browser at `http://localhost:8000` to start chatting.
 
 ---
 
-## Running the Bot Locally (Web UI)
+## Installation
 
-A lightweight FastAPI + React front‑end is provided in the `web/` folder. To launch the full stack:
+### Prerequisites
+
+- Python **3.10** or newer
+- `git`
+- An **OpenAI API key** (or another LLM provider – see configuration)
+- Optional: Docker & Docker‑Compose if you prefer containerised execution
+
+### Using Poetry (recommended)
 
 ```bash
-# From the repository root
-docker compose up --build
+pip install poetry
+poetry install
 ```
 
-- The API will be available at `http://localhost:8000`.
-- The UI can be accessed at `http://localhost:3000`.
+### Using pip
 
-Configuration is read from `config.yaml`. Example snippet:
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Configuration
+
+All configurable values live in `config.yaml`. A minimal example:
 
 ```yaml
 llm:
   provider: openai
-  model: gpt-3.5-turbo
-  temperature: 0.2
+  model: gpt-4o
+  api_key: "${OPENAI_API_KEY}"   # set this env var or replace directly
+
 retriever:
-  top_k: 5
-vectorstore:
   type: faiss
-  path: ./vectorstore
+  index_path: "./index/faiss_index"
+  top_k: 5
+
+ingest:
+  source_dir: "./data"
+  chunk_size: 1000
+  chunk_overlap: 200
+```
+
+> **Tip:** keep secrets out of the repository – use environment variables or a `.env` file (ignored via `.gitignore`).
+
+---
+
+## Running the Bot
+
+### Local development
+
+```bash
+# Load the index (if not already built) and start the FastAPI server
+python -m scripts.run_chatbot
+```
+
+The server exposes two endpoints:
+
+- `GET /` – simple health check.
+- `POST /chat` – expects JSON `{ "message": "Your question" }` and returns `{ "answer": "Generated response" }`.
+
+### Docker
+
+```bash
+docker compose up --build
+```
+
+The service will be reachable at `http://localhost:8000`.
+
+---
+
+## Project Structure
+
+```
+langchain-chatbot/
+├─ data/                 # Raw documents (markdown, txt, pdf …)
+├─ index/                # Vector store files (FAISS, Chroma, …)
+├─ scripts/              # Entry‑point utilities
+│   ├─ ingest.py         # Load documents → split → embed → store
+│   └─ run_chatbot.py    # Starts FastAPI + LangChain chain
+├─ src/                  # Core library code
+│   ├─ llm.py            # LLM wrapper (OpenAI, Anthropic, etc.)
+│   ├─ retriever.py      # Retrieval logic abstraction
+│   └─ chatbot.py        # LangChain chain definition
+├─ config.yaml           # Default configuration file
+├─ requirements.txt      # pip dependencies (fallback for Poetry)
+├─ pyproject.toml        # Poetry project definition
+└─ README.md             # ← This file
 ```
 
 ---
 
 ## Testing
 
+Unit tests live in `tests/`. Run them with:
+
 ```bash
-pytest tests/  # Run the unit and integration tests
+pytest -vv
 ```
 
-The test suite covers:
-- Document ingestion and embedding
-- Retriever correctness (top‑k results)
-- Prompt template rendering
-- End‑to‑end QA flow with a mock LLM
+Integration tests that hit the LLM are marked with the `slow` marker and can be executed via:
+
+```bash
+pytest -m slow
+```
 
 ---
 
 ## Contributing
 
-Contributions are welcome! Please follow these steps:
+We welcome contributions! Follow these steps:
 
-1. **Fork the repository** and clone your fork.
-2. Create a feature branch: `git checkout -b feat/your-feature`.
-3. Make your changes, ensuring that:
-   - Code follows the existing style (PEP 8, type hints).
-   - New functionality is covered by tests.
-   - The README is updated if you add public‑facing features.
-4. Run the test suite locally: `pytest`.
-5. Commit with a clear message and push to your fork.
-6. Open a Pull Request against the `main` branch.
+1. **Fork** the repository.
+2. Create a **feature branch** (`git checkout -b feat/your-feature`).
+3. Ensure code style with `ruff` and type‑check with `mypy`.
+4. Add or update tests to cover your changes.
+5. Submit a **Pull Request** with a clear description of the change.
 
-> **Code of Conduct**: Please adhere to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+### Development workflow
+
+```bash
+# Install dev dependencies (included in pyproject.toml)
+poetry install --with dev
+
+# Run linting & formatting
+ruff check .
+black .
+
+# Run type checking
+mypy src/
+```
+
+Please adhere to the existing code style and keep the documentation up‑to‑date.
 
 ---
 
